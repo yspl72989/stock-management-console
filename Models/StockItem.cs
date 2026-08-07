@@ -1,4 +1,4 @@
-﻿namespace StockCli.Models;
+namespace StockCli.Models;
 
 public class StockItem
 {

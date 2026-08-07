@@ -1,31 +1,24 @@
-﻿using StockCli.Data;
+﻿using Microsoft.Extensions.Configuration;
+using StockCli.Data;
 using StockCli.Models;
 using StockCli.Repositories;
 using StockCli.Services;
 
-string connectionString =
-    "Server=.;Database=StockManagementDb;Trusted_Connection=True;TrustServerCertificate=True;";
+var configuration = new ConfigurationBuilder()
+    .SetBasePath(AppContext.BaseDirectory)
+    .AddJsonFile("appsettings.json", optional: false)
+    .Build();
 
-//database
+var connectionString = configuration.GetConnectionString("StockDb")
+    ?? throw new InvalidOperationException("Connection string 'StockDb' not found.");
+
 var db = new StockDb(connectionString);
+var repository = new StockRepository(db);
+var service = new StockService(repository);
 
-//Repos
-var Repository = new StockRepository(db);
-
-//service
-var Service = new StockService(Repository);
-
-//test
-Service.AddProduct(new StockItem
-{
-    Name = "Orange",
-    Quantity = 5,
-    Price = 4.50m
-});
-var products = Service.GetAllProducts();
+var products = service.GetAllProducts();
 
 foreach (var product in products)
 {
-    Console.WriteLine(
-        $"{product.Id}{product.Name}{product.Quantity}");
+    Console.WriteLine($"{product.Id} | {product.Name} | {product.Quantity} | {product.Price:F2}");
 }
