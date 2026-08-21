@@ -7,7 +7,7 @@ A .NET 8 stock management console app with a layered ADO.NET architecture.
 You do **not** need to create the database or tables manually. The app runs a `DatabaseInitializer` on startup.
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/yspl72989/stock-management-console.git
 cd StockCli
 dotnet restore
 dotnet run
