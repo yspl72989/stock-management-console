@@ -1,17 +1,40 @@
-﻿using StockCli.Data;
+﻿using Microsoft.Extensions.Configuration;
+using StockCli.Data;
 using StockCli.Helper;
 using StockCli.Models;
 using StockCli.Repositories;
 using StockCli.Services;
 
-string connectionString =
-    "Server=.;Database=StockManagementDb;Trusted_Connection=True;TrustServerCertificate=True;";
+var configuration = new ConfigurationBuilder()
+    .AddJsonFile("appsettings.json", optional: false)
+    .Build();
 
-var db = new StockDb(connectionString);
+string stockConnectionString =
+    configuration.GetConnectionString("StockDb")
+    ?? throw new InvalidOperationException(
+        "StockDb connection string is missing.");
 
+string masterConnectionString =
+    configuration.GetConnectionString("MasterDb")
+    ?? throw new InvalidOperationException(
+        "MasterDb connection string is missing.");
+
+// Database initialization
+var initializer = new DatabaseInitializer(
+    stockConnectionString,
+    masterConnectionString);
+
+initializer.Initialize();
+
+// Database
+var db = new StockDb(stockConnectionString);
+
+// Repository
 IStockRepository repository = new StockRepository(db);
 
+// Service
 IStockService service = new StockService(repository);
+
 
 while (true)
 {
