@@ -1,6 +1,6 @@
-using StockCli.Models;
+using StockApi.Models;
 
-namespace StockCli.Repositories;
+namespace StockApi.Repositories;
 
 public interface IStockRepository
 {

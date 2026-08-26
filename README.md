@@ -1,104 +1,131 @@
-# StockCli
+# Stock Management API
 
-A .NET 8 stock management console app with a layered ADO.NET architecture.
+A .NET 8 Web API for managing stock items, backed by SQL Server.
+
+## Prerequisites
+
+- [.NET 8 SDK](https://dotnet.microsoft.com/download)
+- SQL Server (LocalDB or full instance on `Server=.`)
+- Visual Studio 2022 or VS Code (optional)
 
 ## Quick start
 
-You do **not** need to create the database or tables manually. The app runs a `DatabaseInitializer` on startup.
-
 ```bash
-git clone https://github.com/yspl72989/stock-management-console.git
-cd StockCli
-dotnet restore
-dotnet run
+dotnet restore StockApi.sln
+dotnet run --project StockApi.csproj
 ```
 
-On first run, the initializer will:
+Open Swagger UI: [https://localhost:51474/swagger](https://localhost:51474/swagger)
 
-1. Connect to SQL Server using the `MasterDb` connection string
-2. Create the application database if it does not exist
-3. Create the `StockItems` table if it does not exist
+Or press **F5** in Visual Studio with `StockApi.sln` open — it launches straight to Swagger.
 
-After that, the interactive CLI menu opens and you can start managing stock.
+## Database
 
-### Prerequisites
+Connection strings are in `appsettings.json`:
 
-- [.NET 8 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
-- SQL Server (local instance — e.g. `(localdb)\MSSQLLocalDB` or `Server=.`)
+| Setting | Database | Used for |
+|---------|----------|----------|
+| `StockDb` | `StockManagementDb` | All stock data (`StockItems` table) |
+| `MasterDb` | `master` | Startup only — creates `StockManagementDb` if missing |
 
-No manual database setup is required.
+On first run, `DatabaseInitializer` creates the database and table automatically. No manual SQL setup is required.
 
-## Configuration
+To verify data after testing, connect in SSMS and run:
 
-Connection strings live in `appsettings.json`:
+```sql
+USE StockManagementDb;
+SELECT * FROM dbo.StockItems;
+```
+
+## How to test with Swagger
+
+1. Run the API (see Quick start above).
+2. In Swagger, expand the **Stock** section.
+3. Try the endpoints in this order:
+
+### POST — create a stock item
+
+`POST /api/stock` → **Try it out** → use this body:
 
 ```json
 {
-  "ConnectionStrings": {
-    "StockDb": "Server=.;Database=StockManagementDb;Trusted_Connection=True;TrustServerCertificate=True;",
-    "MasterDb": "Server=.;Database=master;Trusted_Connection=True;TrustServerCertificate=True;"
-  }
+  "name": "Orange",
+  "quantity": 5,
+  "unit": "Kg",
+  "price": 4.50
 }
 ```
 
-| Setting | Purpose |
-|---------|---------|
-| `StockDb` | Application database used by the CLI and repository |
-| `MasterDb` | Used only by `DatabaseInitializer` to create the app database |
+Expected: **201 Created**
 
-Update `Server=.` if your SQL Server instance name is different.
+Validation rules:
+- `unit` must be `Kg`, `Bag`, or `Piece`
+- `quantity` must be > 0 (whole number for Bag/Piece; up to 3 decimals for Kg)
+- `price` must be > 0 (max 2 decimal places)
+- duplicate names return **409 Conflict**
 
-## Database initializer
+### GET — list or fetch one item
 
-`Data/DatabaseInitializer.cs` runs automatically when the app starts (see `Program.cs`).
+- `GET /api/stock` — returns all items
+- `GET /api/stock/{id}` — returns one item by id (use an id from the list)
 
+### PUT — update an item
 
+`PUT /api/stock/{id}` → body example:
 
-The initializer is safe to run repeatedly — it only creates what is missing.
-
-## Current implementation status
-
-The application demonstrates the complete data flow:
-
-```text
-Program.cs → DatabaseInitializer → StockService → StockRepository → SQL Server
+```json
+{
+  "name": "Orange",
+  "quantity": 10,
+  "unit": "Kg",
+  "price": 5.00
+}
 ```
 
-Features:
+Expected: **204 No Content**, then confirm with `GET /api/stock/{id}`.
 
-- Insert, update, delete, and view products from the console
-- Duplicate product name checking
-- Unit support: `Kg`, `Bag`, `Piece`
-- Decimal quantity (e.g. `1.5` kg)
-- Validation for name, unit, quantity, and price
+### DELETE — remove an item
 
-## Menu options
+`DELETE /api/stock/{id}` → Expected: **204 No Content**
 
-1. Insert product
-2. Update product
-3. Delete product
-4. View products
-5. Exit
+## Integration tests
 
-## Validation rules
+Automated API tests live in `StockApi.Tests/` using **xUnit** and **WebApplicationFactory**.
 
-| Field | Rule |
-|-------|------|
-| Name | Required, max 100 characters, unique |
-| Unit | Must be Kg, Bag, or Piece |
-| Quantity | Greater than zero; max 3 decimal places; Bag/Piece must be whole numbers |
-| Price | Greater than zero; max 2 decimal places |
+| Test | What it checks |
+|------|----------------|
+| `GivenNewStock_WhenGetById_ThenIdMatched` | POST → GET all (find id) → GET by id |
+| `GivenExistingStock_WhenUpdated_ThenStockIsUpdated` | POST → PUT → GET confirms update |
 
-## Coming soon
+Run all tests:
 
-- **Web API controllers** — HTTP endpoints for the same stock operations (planned)
+```bash
+dotnet test StockApi.Tests\StockApi.Tests.csproj
+```
 
-The service and repository layers are already structured so controllers can reuse the same `IStockService` without changing business logic.
+Requirements: SQL Server must be running (same connection strings as the API).
 
-## Design notes
+## Solution layout
 
-- Interfaces separate contracts from implementations
-- Constructor injection wires repository into service
-- SQL uses parameterized queries via ADO.NET
-- Business logic stays out of the console and repository layers
-- Database setup is handled at startup — no separate migration step for local development
+```
+StockApi.csproj              Web API (controllers, services, repositories)
+StockApi.Tests/              Integration tests
+  Integration/EndpointTest.cs
+Controllers/                 REST endpoints
+Services/                    Business logic and validation
+Repositories/                ADO.NET data access
+Data/                        DatabaseInitializer, StockDb
+```
+
+## Architecture
+
+```
+HTTP request → StockController → StockService → StockRepository → SQL Server
+```
+
+## Next steps
+
+1. **More integration tests** — DELETE, duplicate name (409), validation errors (400)
+2. **Unit tests** — cover `StockService` validation rules in isolation
+3. **Improve POST response** — return the created item and id in the 201 response
+

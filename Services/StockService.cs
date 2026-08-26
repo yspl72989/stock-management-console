@@ -1,8 +1,8 @@
-using StockCli.Models;
-using StockCli.Repositories;
+using StockApi.Models;
+using StockApi.Repositories;
 using System.Diagnostics;
 
-namespace StockCli.Services;
+namespace StockApi.Services;
 
 public class StockService : IStockService
 {

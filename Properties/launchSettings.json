@@ -1,12 +1,13 @@
 {
   "profiles": {
-    "StockApp": {
+    "StockApi": {
       "commandName": "Project",
       "launchBrowser": true,
+      "launchUrl": "swagger",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       },
-      "applicationUrl": "https://localhost:60655;http://localhost:60656"
+      "applicationUrl": "https://localhost:51474;http://localhost:51475"
     }
   }
 }

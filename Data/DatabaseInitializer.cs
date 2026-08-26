@@ -1,6 +1,6 @@
-﻿using Microsoft.Data.SqlClient;
+using Microsoft.Data.SqlClient;
 
-namespace StockCli.Data;
+namespace StockApi.Data;
 
 internal class DatabaseInitializer
 {

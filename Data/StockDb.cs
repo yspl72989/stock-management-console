@@ -1,6 +1,6 @@
 ﻿using Microsoft.Data.SqlClient;
 
-namespace StockCli.Data;
+namespace StockApi.Data;
 
 public class StockDb
 {

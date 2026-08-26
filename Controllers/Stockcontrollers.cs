@@ -1,8 +1,8 @@
 using Microsoft.AspNetCore.Mvc;
-using StockCli.Models;
-using StockCli.Services;
+using StockApi.Models;
+using StockApi.Services;
 
-namespace StockCli.Controllers;
+namespace StockApi.Controllers;
 
 [ApiController]
 [Route("api/[controller]")]

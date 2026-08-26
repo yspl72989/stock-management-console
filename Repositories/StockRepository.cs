@@ -1,8 +1,8 @@
 using Microsoft.Data.SqlClient;
-using StockCli.Data;
-using StockCli.Models;
+using StockApi.Data;
+using StockApi.Models;
 
-namespace StockCli.Repositories;
+namespace StockApi.Repositories;
 
 public class StockRepository : IStockRepository
 {

@@ -1,19 +1,16 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
-    <RootNamespace>StockCli</RootNamespace>
-    <AssemblyName>StockCli</AssemblyName>
+    <RootNamespace>StockApi</RootNamespace>
+    <AssemblyName>StockApi</AssemblyName>
   </PropertyGroup>
-
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.SqlClient" Version="6.0.1" />
-    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="8.0.1" />
-	  
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.6.2" />
   </ItemGroup>
 
   <ItemGroup>
@@ -22,5 +19,15 @@
     </None>
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Remove="StockApi.Tests/**" />
+    <None Remove="StockApi.Tests/**" />
+    <EmbeddedResource Remove="StockApi.Tests/**" />
+    <Content Remove="StockApi.Tests/**" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="StockApi.Tests" />
+  </ItemGroup>
 
 </Project>

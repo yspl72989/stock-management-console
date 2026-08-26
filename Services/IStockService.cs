@@ -1,6 +1,6 @@
-using StockCli.Models;
+using StockApi.Models;
 
-namespace StockCli.Services;
+namespace StockApi.Services;
 
 public interface IStockService
 {
