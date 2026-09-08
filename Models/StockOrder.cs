@@ -1,6 +1,6 @@
 namespace StockApi.Models;
 
-public class StockItem
+public class StockOrder
 {
     public int Id { get; set; }
     public string Name { get; set; } = string.Empty;
@@ -8,4 +8,5 @@ public class StockItem
     public string Unit { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public DateTime LastModifiedDate { get; set; }
+    public string Invoice { get; set; } = "N/A";
 }

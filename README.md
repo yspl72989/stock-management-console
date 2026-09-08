@@ -1,6 +1,6 @@
 # Stock Management API
 
-A .NET 8 Web API for managing stock items, backed by SQL Server.
+A .NET 8 Web API for managing stock items, backed by SQL Server. StockItem data access uses stored procedures deployed from `Scripts/StoredProcedures/StockItem/` on startup.
 
 ## Prerequisites
 
@@ -90,17 +90,17 @@ Expected: **204 No Content**, then confirm with `GET /api/stock/{id}`.
 
 ## Integration tests
 
-Automated API tests live in `StockApi.Tests/` using **xUnit** and **WebApplicationFactory**.
+Automated API tests live in `StockApi.Test.IntegrationTests/` using **xUnit**, **WebApplicationFactory**, and a shared `[Collection("IntegrationTests")]` fixture.
 
 | Test | What it checks |
 |------|----------------|
 | `GivenNewStock_WhenGetById_ThenIdMatched` | POST → GET all (find id) → GET by id |
 | `GivenExistingStock_WhenUpdated_ThenStockIsUpdated` | POST → PUT → GET confirms update |
 
-Run all tests:
+Run integration tests:
 
 ```bash
-dotnet test StockApi.Tests\StockApi.Tests.csproj
+dotnet test StockApi.Test.IntegrationTests\StockApi.Test.IntegrationTests.csproj
 ```
 
 Requirements: SQL Server must be running (same connection strings as the API).
@@ -108,9 +108,9 @@ Requirements: SQL Server must be running (same connection strings as the API).
 ## Solution layout
 
 ```
-StockApi.csproj              Web API (controllers, services, repositories)
-StockApi.Tests/              Integration tests
-  Integration/EndpointTest.cs
+StockApi.csproj                        Web API (controllers, services, repositories)
+StockApi.Test.IntegrationTests/        Integration tests (WebApplicationFactory + collection fixture)
+StockApi.Tests/                        Unit tests (placeholder)
 Controllers/                 REST endpoints
 Services/                    Business logic and validation
 Repositories/                ADO.NET data access

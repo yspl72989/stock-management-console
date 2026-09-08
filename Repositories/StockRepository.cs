@@ -1,4 +1,7 @@
+using System.Data;
+// CommandType.StoredProcedure from system.data namespace
 using Microsoft.Data.SqlClient;
+using StockApi.Constants;
 using StockApi.Data;
 using StockApi.Models;
 
@@ -19,28 +22,12 @@ public class StockRepository : IStockRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            
-            SELECT Id, Name, Quantity,Unit, Price
-            FROM StockItems
-            Order BY Id
-            
-            """;
-            
-
-        using var command = new SqlCommand(sql, connection);
+        using var command = CreateProcedureCommand(connection, StockItemProcedures.GetAll);
         using var reader = command.ExecuteReader();
 
         while (reader.Read())
         {
-            items.Add(new StockItem
-            {
-                Id = reader.GetInt32(0),
-                Name = reader.GetString(1),
-                Quantity = reader.GetDecimal(2),
-                Unit = reader.GetString(3),
-                Price = reader.GetDecimal(4)
-            });
+            items.Add(MapStockItem(reader));
         }
 
         return items;
@@ -51,31 +38,32 @@ public class StockRepository : IStockRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            SELECT Id, Name, Quantity, Unit, Price
-            FROM StockItems
-            WHERE Id = @Id
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Id", id);
+        using var command = CreateProcedureCommand(connection, StockItemProcedures.GetById);
+        command.Parameters.Add("@Id", SqlDbType.Int).Value = id;
 
         using var reader = command.ExecuteReader();
 
-        if (reader.Read())
+        return reader.Read() ? MapStockItem(reader) : null;
+    }
+
+    public List<StockItem> CheckUpdates(DateTime lastModifiedDate)
+    {
+        var items = new List<StockItem>();
+
+        using var connection = _db.CreateConnection();
+        connection.Open();
+
+        using var command = CreateProcedureCommand(connection, StockItemProcedures.CheckUpdates);
+        command.Parameters.Add("@LastModifiedDate", SqlDbType.DateTime2).Value = lastModifiedDate;
+
+        using var reader = command.ExecuteReader();
+
+        while (reader.Read())
         {
-            return new StockItem
-            {
-                Id = reader.GetInt32(0),
-                Name = reader.GetString(1),
-                Quantity = reader.GetDecimal(2),
-                Unit = reader.GetString(3),
-                Price = reader.GetDecimal(4)
-            };
+            items.Add(MapStockItem(reader));
         }
 
-        return null;
-
+        return items;
     }
 
     public bool ExistingByName(string name, int? excludeId = null)
@@ -83,57 +71,26 @@ public class StockRepository : IStockRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        string sql;
+        using var command = CreateProcedureCommand(connection, StockItemProcedures.ExistingByName);
+        command.Parameters.Add("@Name", SqlDbType.NVarChar, 100).Value = name;
+        command.Parameters.Add("@ExcludeId", SqlDbType.Int).Value =
+            excludeId.HasValue ? excludeId.Value : DBNull.Value;
 
-        if (excludeId.HasValue)
-        {
-            sql = """
-
-                SELECT COUNT(1)
-                FROM StockItems
-                WHERE Name = @Name
-                AND Id <> @ExcludeId
-                """;
-        }
-        else
-        {
-            sql = """
-                select count(1)
-                from stockitems
-                where name = @Name
-                """;
-        }
-
-        using var command = new SqlCommand(sql, connection);
-
-        command.Parameters.Add("@Name", System.Data.SqlDbType.NVarChar,100)
-            .Value = name;
-
-        if (excludeId.HasValue)
-        {
-            command.Parameters.Add("@ExcludeId", System.Data.SqlDbType.Int)
-                .Value = excludeId.Value;
-        }
         var count = (int)command.ExecuteScalar()!;
         return count > 0;
     }
-
 
     public void Add(StockItem item)
     {
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            INSERT INTO StockItems (Name, Quantity, Unit, Price)
-            VALUES (@Name, @Quantity, @Unit, @Price)
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Name", item.Name);
-        command.Parameters.AddWithValue("@Quantity", item.Quantity);
-        command.Parameters.AddWithValue("@Unit", item.Unit);
-        command.Parameters.AddWithValue("@Price", item.Price);
+        using var command = CreateProcedureCommand(connection, StockItemProcedures.Insert);
+        command.Parameters.Add("@Name", SqlDbType.NVarChar, 100).Value = item.Name;
+        command.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = item.Quantity;
+        command.Parameters.Add("@Unit", SqlDbType.NVarChar, 20).Value = item.Unit;
+        command.Parameters.Add("@Price", SqlDbType.Decimal).Value = item.Price;
+        command.Parameters.Add("@LastModifiedDate", SqlDbType.DateTime2).Value = item.LastModifiedDate;
 
         command.ExecuteNonQuery();
     }
@@ -143,22 +100,13 @@ public class StockRepository : IStockRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            UPDATE StockItems
-            SET
-                Name = @Name,
-                Quantity = @Quantity,
-                Unit = @Unit,
-                Price = @Price
-            WHERE Id = @Id
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Id", item.Id);
-        command.Parameters.AddWithValue("@Name", item.Name);
-        command.Parameters.AddWithValue("@Quantity", item.Quantity);
-        command.Parameters.AddWithValue("@Unit", item.Unit);
-        command.Parameters.AddWithValue("@Price", item.Price);
+        using var command = CreateProcedureCommand(connection, StockItemProcedures.Update);
+        command.Parameters.Add("@Id", SqlDbType.Int).Value = item.Id;
+        command.Parameters.Add("@Name", SqlDbType.NVarChar, 100).Value = item.Name;
+        command.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = item.Quantity;
+        command.Parameters.Add("@Unit", SqlDbType.NVarChar, 20).Value = item.Unit;
+        command.Parameters.Add("@Price", SqlDbType.Decimal).Value = item.Price;
+        command.Parameters.Add("@LastModifiedDate", SqlDbType.DateTime2).Value = item.LastModifiedDate;
 
         command.ExecuteNonQuery();
     }
@@ -168,13 +116,41 @@ public class StockRepository : IStockRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            DELETE FROM StockItems WHERE Id = @Id
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Id", id);
+        using var command = CreateProcedureCommand(connection, StockItemProcedures.Delete);
+        ///  → SqlCommand named "dbo.uspStockItem_Delete", CommandType = StoredProcedure
+        command.Parameters.Add("@Id", SqlDbType.Int).Value = id;
+        // → pass @Id into the sproc
 
         command.ExecuteNonQuery();
+        //  → run the sproc (no rows returned, just deletes)
     }
+
+// create a private method to create a command with the procedure name
+// and the connection. Also The helper avoids repeating this in all 7 methods:
+//var command = new SqlCommand(procedureName, connection);
+//command.CommandType = CommandType.StoredProcedure;
+
+   private static SqlCommand CreateProcedureCommand(SqlConnection connection, string procedureName)
+    {
+        var command = new SqlCommand(procedureName, connection)
+        {
+            //CommandType tells SQL Server how to interpret the first argument
+            //Without CommandType = StoredProcedure, ADO.NET treats "dbo.uspStockItem_Delete" as SQL text, not a procedure call → error or wrong behaviour.
+            CommandType = CommandType.StoredProcedure
+            //CommandType.StoredProcedure — tells ADO.NET the string is a procedure name, not raw SQL
+        };
+        return command;
+    }
+ 
+
+//converts one SqlDataReader row into a StockItem (DRY mapping)
+    private static StockItem MapStockItem(SqlDataReader reader) => new()
+    {
+        Id = reader.GetInt32(reader.GetOrdinal("Id")),
+        Name = reader.GetString(reader.GetOrdinal("Name")),
+        Quantity = reader.GetDecimal(reader.GetOrdinal("Quantity")),
+        Unit = reader.GetString(reader.GetOrdinal("Unit")),
+        Price = reader.GetDecimal(reader.GetOrdinal("Price")),
+        LastModifiedDate = reader.GetDateTime(reader.GetOrdinal("LastModifiedDate"))
+    };
 }

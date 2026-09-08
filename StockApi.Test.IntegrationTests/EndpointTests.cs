@@ -1,19 +1,24 @@
 using System.Net;
 using System.Net.Http.Json;
-using Microsoft.AspNetCore.Mvc.Testing;
 using StockApi.Models;
+using StockApi.Test.IntegrationTests.Fixtures;
 
-namespace StockApi.Tests.Integration;
+namespace StockApi.Test.IntegrationTests;
 
-public class EndpointTest : IClassFixture<WebApplicationFactory<Program>>
+[Collection("IntegrationTests")]
+public sealed class EndpointTests
 {
     private readonly HttpClient _httpClient;
 
-    public EndpointTest(WebApplicationFactory<Program> factory)
+    public EndpointTests(WebApplicationFactoryFixture factory)
     {
-        _httpClient = factory.CreateClient();
+        _httpClient = factory.HttpClient;
     }
 
+    //server is not working , assert the server is working (log/ timeout)
+    // mock the inlinedate .. unit test
+    // serive is not working, then integration failed, but wanna unit test passed
+    //different mocks mock ui/service
     [Fact]
     public async Task GivenNewStock_WhenGetById_ThenIdMatched()
     {
@@ -23,6 +28,7 @@ public class EndpointTest : IClassFixture<WebApplicationFactory<Program>>
             Quantity = 1,
             Unit = "Kg",
             Price = 1
+            // no LastModifiedDate here
         };
 
         var postResponse = await _httpClient.PostAsJsonAsync("api/stock", item);
@@ -61,7 +67,14 @@ public class EndpointTest : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(HttpStatusCode.Created, postResponse.StatusCode);
 
         var allItems = await (await _httpClient.GetAsync("api/stock"))
+            //deserilioze from json to c
+            // two lines being together 
+            //var response = await _httpClient.GetAsync("api/stock");
+            // var allItems = await response.Content.ReadFromJsonAsync<List<StockItem>>();
+
             .Content.ReadFromJsonAsync<List<StockItem>>();
+
+        //find id because we will use it for check/get all
 
         var createdId = allItems!.First(i => i.Name == item.Name).Id;
 
@@ -88,5 +101,32 @@ public class EndpointTest : IClassFixture<WebApplicationFactory<Program>>
         Assert.Equal(createdId, result.Id);
         Assert.Equal(2, result.Quantity);
         Assert.Equal(5, result.Price);
+    }
+    
+    [Fact]
+    public async Task GivenExistingStock_WhenDeleted_ThenItemRemoved()
+    {
+        var item = new StockItem
+        {
+            Name = $"ApiDelete-{Guid.NewGuid()}",
+            Quantity = 1,
+            Unit = "Kg",
+            Price = 1
+        };
+        var postResponse = await _httpClient.PostAsJsonAsync("api/stock", item);
+
+        Assert.NotNull(postResponse);
+        Assert.Equal(HttpStatusCode.Created, postResponse.StatusCode);
+
+        var allItems = await (await _httpClient.GetAsync("api/stock"))
+            .Content.ReadFromJsonAsync<List<StockItem>>();
+
+        var createdId = allItems!.First(i => i.Name == item.Name).Id;
+
+        var deleteResponse = await _httpClient.DeleteAsync($"api/stock/{createdId}");
+        Assert.Equal(HttpStatusCode.NoContent, deleteResponse.StatusCode);
+
+        var getResponse = await _httpClient.GetAsync($"api/stock/{createdId}");
+        Assert.Equal(HttpStatusCode.NotFound, getResponse.StatusCode);
     }
 }

@@ -23,6 +23,7 @@ initializer.Initialize();
 builder.Services.AddScoped<StockDb>(_ => new StockDb(stockConnectionString));
 builder.Services.AddScoped<IStockRepository, StockRepository>();
 builder.Services.AddScoped<IStockService, StockService>();
+builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();

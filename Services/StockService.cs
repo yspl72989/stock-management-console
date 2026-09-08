@@ -26,6 +26,13 @@ public class StockService : IStockService
 
     public StockItem? GetProductById(int id) => _repository.GetById(id);
 
+    public List<StockItem> CheckRecentlyModifiedProducts(DateTime cutoffDate)
+    {
+        return _repository.CheckUpdates(cutoffDate) ?? new List<StockItem>();
+    }
+
+
+
     public void AddProduct(StockItem item)
     {
         NormalizeAndValidate(item);
@@ -36,6 +43,8 @@ public class StockService : IStockService
                 $"Prodct '{item.Name}' already exists."
                 );
         }
+        //server will generate the time before saved in db
+        item.LastModifiedDate = DateTime.UtcNow;
         _repository.Add(item);
 
     }
@@ -55,8 +64,10 @@ public class StockService : IStockService
             throw new InvalidOperationException("Product does not exist.");
         }
 
+        item.LastModifiedDate = DateTime.UtcNow;
         _repository.Update(item);
     }
+
 
     public void DeleteProduct(int id)
     {
@@ -76,8 +87,10 @@ public class StockService : IStockService
         _repository.Delete(id);
     }
 
+    
+
     private void NormalizeAndValidate(StockItem item)
-    {
+     {
         item.Name =item.Name.Trim();
         item.Unit = item.Unit.Trim();
 
@@ -132,6 +145,7 @@ public class StockService : IStockService
             throw new ArgumentException(
                 "Price cannot have more than 2 decimal places.");
         }
+     
     }
 
     private static string NormalizeUnit(string unit)
@@ -145,4 +159,5 @@ public class StockService : IStockService
 
         };
     }
+
 }
