@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using StockApi.Constants;
 using StockApi.Models;
 using StockApi.Repositories;
 using StockApi.Test.IntegrationTests.Fixtures;
@@ -25,7 +26,7 @@ public sealed class StockOrderRepositoryTests
             Unit = "Kg",
             Price = 10,
             LastModifiedDate = DateTime.UtcNow,
-            Invoice = "N/A"
+            Invoice = InvoiceStatus.NotApplicable
         };
 
         _repository.Create(order);

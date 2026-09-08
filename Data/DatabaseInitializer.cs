@@ -1,7 +1,7 @@
 using Microsoft.Data.SqlClient;
+using StockApi.Constants;
 
 namespace StockApi.Data;
-
 internal class DatabaseInitializer
 {
     private readonly string _stockConnectionString;
@@ -89,7 +89,7 @@ internal class DatabaseInitializer
         using var connection = new SqlConnection(_stockConnectionString);
         connection.Open();
 
-        const string sql = """
+        var sql = $"""
         IF OBJECT_ID('dbo.StockOrder', 'U') IS NULL
         BEGIN
             CREATE TABLE dbo.StockOrder
@@ -101,12 +101,12 @@ internal class DatabaseInitializer
                 Unit NVARCHAR(20) NOT NULL,
                 LastModifiedDate DATETIME2(2) NOT NULL,
                 Invoice NVARCHAR(10) NOT NULL
-                    CONSTRAINT DF_StockOrder_Invoice DEFAULT 'N/A',
+                    CONSTRAINT DF_StockOrder_Invoice DEFAULT '{InvoiceStatus.NotApplicable}',
 
                 CONSTRAINT PK_StockOrder
                     PRIMARY KEY (Id),
                 CONSTRAINT CK_StockOrder_Invoice
-                    CHECK (Invoice IN ('Send', 'N/A'))
+                    CHECK (Invoice IN ('{InvoiceStatus.Send}', '{InvoiceStatus.NotApplicable}'))
             );
         END
         """;
