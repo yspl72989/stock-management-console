@@ -1,4 +1,6 @@
+using System.Data;
 using Microsoft.Data.SqlClient;
+using StockApi.Constants;
 using StockApi.Data;
 using StockApi.Models;
 
@@ -19,13 +21,7 @@ public class StockOrderRepository : IStockOrderRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            SELECT Id, Name, Quantity, Unit, Price, LastModifiedDate, Invoice
-            FROM StockOrder
-            ORDER BY Id
-            """;
-
-        using var command = new SqlCommand(sql, connection);
+        using var command = CreateProcedureCommand(connection, StockOrderProcedures.GetAll);
         using var reader = command.ExecuteReader();
 
         while (reader.Read())
@@ -41,14 +37,8 @@ public class StockOrderRepository : IStockOrderRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            SELECT Id, Name, Quantity, Unit, Price, LastModifiedDate, Invoice
-            FROM StockOrder
-            WHERE Id = @Id
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Id", id);
+        using var command = CreateProcedureCommand(connection, StockOrderProcedures.GetById);
+        command.Parameters.Add("@Id", SqlDbType.Int).Value = id;
 
         using var reader = command.ExecuteReader();
 
@@ -60,14 +50,8 @@ public class StockOrderRepository : IStockOrderRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            SELECT Id, Name, Quantity, Unit, Price, LastModifiedDate, Invoice
-            FROM StockOrder
-            WHERE Name = @Name
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Name", name);
+        using var command = CreateProcedureCommand(connection, StockOrderProcedures.GetByName);
+        command.Parameters.Add("@Name", SqlDbType.NVarChar, 100).Value = name;
 
         using var reader = command.ExecuteReader();
 
@@ -79,18 +63,13 @@ public class StockOrderRepository : IStockOrderRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            INSERT INTO StockOrder (Name, Quantity, Unit, Price, LastModifiedDate, Invoice)
-            VALUES (@Name, @Quantity, @Unit, @Price, @LastModifiedDate, @Invoice)
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Name", order.Name);
-        command.Parameters.AddWithValue("@Quantity", order.Quantity);
-        command.Parameters.AddWithValue("@Unit", order.Unit);
-        command.Parameters.AddWithValue("@Price", order.Price);
-        command.Parameters.AddWithValue("@LastModifiedDate", order.LastModifiedDate);
-        command.Parameters.AddWithValue("@Invoice", order.Invoice);
+        using var command = CreateProcedureCommand(connection, StockOrderProcedures.Insert);
+        command.Parameters.Add("@Name", SqlDbType.NVarChar, 100).Value = order.Name;
+        command.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = order.Quantity;
+        command.Parameters.Add("@Unit", SqlDbType.NVarChar, 20).Value = order.Unit;
+        command.Parameters.Add("@Price", SqlDbType.Decimal).Value = order.Price;
+        command.Parameters.Add("@LastModifiedDate", SqlDbType.DateTime2).Value = order.LastModifiedDate;
+        command.Parameters.Add("@Invoice", SqlDbType.NVarChar, 10).Value = order.Invoice;
 
         command.ExecuteNonQuery();
     }
@@ -100,26 +79,14 @@ public class StockOrderRepository : IStockOrderRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            UPDATE StockOrder
-            SET
-                Name = @Name,
-                Quantity = @Quantity,
-                Unit = @Unit,
-                Price = @Price,
-                LastModifiedDate = @LastModifiedDate,
-                Invoice = @Invoice
-            WHERE Id = @Id
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Id", order.Id);
-        command.Parameters.AddWithValue("@Name", order.Name);
-        command.Parameters.AddWithValue("@Quantity", order.Quantity);
-        command.Parameters.AddWithValue("@Unit", order.Unit);
-        command.Parameters.AddWithValue("@Price", order.Price);
-        command.Parameters.AddWithValue("@LastModifiedDate", order.LastModifiedDate);
-        command.Parameters.AddWithValue("@Invoice", order.Invoice);
+        using var command = CreateProcedureCommand(connection, StockOrderProcedures.Update);
+        command.Parameters.Add("@Id", SqlDbType.Int).Value = order.Id;
+        command.Parameters.Add("@Name", SqlDbType.NVarChar, 100).Value = order.Name;
+        command.Parameters.Add("@Quantity", SqlDbType.Decimal).Value = order.Quantity;
+        command.Parameters.Add("@Unit", SqlDbType.NVarChar, 20).Value = order.Unit;
+        command.Parameters.Add("@Price", SqlDbType.Decimal).Value = order.Price;
+        command.Parameters.Add("@LastModifiedDate", SqlDbType.DateTime2).Value = order.LastModifiedDate;
+        command.Parameters.Add("@Invoice", SqlDbType.NVarChar, 10).Value = order.Invoice;
 
         command.ExecuteNonQuery();
     }
@@ -129,27 +96,29 @@ public class StockOrderRepository : IStockOrderRepository
         using var connection = _db.CreateConnection();
         connection.Open();
 
-        const string sql = """
-            DELETE FROM StockOrder WHERE Id = @Id
-            """;
-
-        using var command = new SqlCommand(sql, connection);
-        command.Parameters.AddWithValue("@Id", id);
+        using var command = CreateProcedureCommand(connection, StockOrderProcedures.Delete);
+        command.Parameters.Add("@Id", SqlDbType.Int).Value = id;
 
         command.ExecuteNonQuery();
     }
 
-    private static StockOrder MapOrder(SqlDataReader reader)
+    private static SqlCommand CreateProcedureCommand(SqlConnection connection, string procedureName)
     {
-        return new StockOrder
+        var command = new SqlCommand(procedureName, connection)
         {
-            Id = reader.GetInt32(0),
-            Name = reader.GetString(1),
-            Quantity = reader.GetDecimal(2),
-            Unit = reader.GetString(3),
-            Price = reader.GetDecimal(4),
-            LastModifiedDate = reader.GetDateTime(5),
-            Invoice = reader.GetString(6)
+            CommandType = CommandType.StoredProcedure
         };
+        return command;
     }
+
+    private static StockOrder MapOrder(SqlDataReader reader) => new()
+    {
+        Id = reader.GetInt32(reader.GetOrdinal("Id")),
+        Name = reader.GetString(reader.GetOrdinal("Name")),
+        Quantity = reader.GetDecimal(reader.GetOrdinal("Quantity")),
+        Unit = reader.GetString(reader.GetOrdinal("Unit")),
+        Price = reader.GetDecimal(reader.GetOrdinal("Price")),
+        LastModifiedDate = reader.GetDateTime(reader.GetOrdinal("LastModifiedDate")),
+        Invoice = reader.GetString(reader.GetOrdinal("Invoice"))
+    };
 }

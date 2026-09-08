@@ -20,6 +20,12 @@
     <None Update="Scripts\StoredProcedures\StockItem\*.sql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="Scripts\StoredProcedures\StockOrder\*.sql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    
+    <!--This tells MSBuild: when you build, copy these .sql files from the project folder into the output folder (bin/Debug/net8.0/).-->
+    <!--add the StockOrder copy rule in StockApi.csproj so those scripts land in bin/ on build, so EnsureStockOrderStoredProcedures() can find them at startup.-->
   </ItemGroup>
 
   <ItemGroup>

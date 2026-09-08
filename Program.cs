@@ -22,6 +22,8 @@ initializer.Initialize();
 
 builder.Services.AddScoped<StockDb>(_ => new StockDb(stockConnectionString));
 builder.Services.AddScoped<IStockRepository, StockRepository>();
+//Register IStockOrderRepository in Program.cs so it can be injected into the StockOrderController.
+builder.Services.AddScoped<IStockOrderRepository, StockOrderRepository>();
 builder.Services.AddScoped<IStockService, StockService>();
 builder.Services.AddScoped<ISupplierService, SupplierService>();
 builder.Services.AddControllers();
