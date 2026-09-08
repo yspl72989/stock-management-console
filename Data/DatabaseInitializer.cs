@@ -25,6 +25,7 @@ internal class DatabaseInitializer
         EnsureLastModifiedDateColumn();
         //new wrapper to deploy all stored procedures at once
         EnsureStockItemStoredProcedures();
+        EnsureStockOrderStoredProcedures();
     }
 
     private static string GetDatabaseName(string connectionString)
@@ -135,22 +136,37 @@ internal class DatabaseInitializer
 //create a method to deploy all stored procedures at once
     private void EnsureStockItemStoredProcedures()
     //create a sqlconnection using the stockconnectionstring and open the connection
-    {    using var connection = new SqlConnection(_stockConnectionString);
-        connection.Open();
-
+    {
 //create a variable to store the path to the scripts directory
 //AppContext.BaseDirectory — the app’s output directory (e.g. bin/Debug/net8.0/)
 //Appends Scripts/StoredProcedures/StockItem/ to the base directory
+        EnsureStoredProcedures("StockItem");
+    }
+/*Wired StockOrder sproc deployment in DatabaseInitializer.cs:
+
+Initialize() now calls EnsureStockOrderStoredProcedures() after the StockItem deploy.
+EnsureStockOrderStoredProcedures() deploys all *.sql files from Scripts/StoredProcedures/StockOrder/ using the existing DeployStoredProcedureScript helper.*/
+    private void EnsureStockOrderStoredProcedures()
+    {
+        EnsureStoredProcedures("StockOrder");
+    }
+
+    private void EnsureStoredProcedures(string subfolder)
+    {    using var connection = new SqlConnection(_stockConnectionString);
+        connection.Open();
+
         var scriptsDirectory = Path.Combine(
+            
+            //AppContext.BaseDirectory is bin/Debug/net8.0/ when you run the app — not your source folder (c:\eNett\Git\StockCli\Scripts\...).
+           //Without the copy rule, the app would start, look in bin/.../Scripts/StockOrder/, find nothing, and fail.
             AppContext.BaseDirectory,
             "Scripts",
             "StoredProcedures",
-            "StockItem");
+            subfolder);
 
         foreach (var scriptPath in Directory.GetFiles(scriptsDirectory, "*.sql"))
         {
             //Reads the full script text and passes it to DeployStoredProcedureScript on the open connection.
-
             DeployStoredProcedureScript(connection, File.ReadAllText(scriptPath));
         }
     }
