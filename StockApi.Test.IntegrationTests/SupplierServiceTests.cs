@@ -1,4 +1,5 @@
 using Microsoft.Extensions.DependencyInjection;
+using StockApi.Constants;
 using StockApi.Models;
 using StockApi.Repositories;
 using StockApi.Services;
@@ -41,7 +42,45 @@ public sealed class SupplierServiceTests
         Assert.Equal(3, order.Quantity);
         Assert.Equal("Bag", order.Unit);
         Assert.Equal(7.50m, order.Price);
-        Assert.Equal("N/A", order.Invoice);
+        Assert.Equal(InvoiceStatus.NotApplicable, order.Invoice);
     }
 
+    [Fact]
+    public void GivenExistingOrder_WhenGenerateInvoice_ThenReturnsInvoiceAndUpdatesOrder()
+    {
+        var productName = $"InvoiceOrder-{Guid.NewGuid()}";
+
+        _stockService.AddProduct(new StockItem
+        {
+            Name = productName,
+            Quantity = 10,
+            Unit = "Kg",
+            Price = 4.00m
+        });
+
+        _supplierService.PlaceOrder(productName, 2);
+
+        var order = _orderRepository.GetByName(productName);
+        Assert.NotNull(order);
+
+        var invoice = _supplierService.GenerateInvoice(order.Id);
+
+        Assert.Equal(order.Id, invoice.OrderId);
+        Assert.Equal(productName, invoice.Name);
+        Assert.Equal(2, invoice.Quantity);
+        Assert.Equal("Kg", invoice.Unit);
+        Assert.Equal(4.00m, invoice.Price);
+        Assert.Equal(8.00m, invoice.Total);
+        Assert.True(invoice.GeneratedAt <= DateTime.UtcNow);
+
+        var updatedOrder = _orderRepository.GetById(order.Id);
+        Assert.NotNull(updatedOrder);
+        Assert.Equal(InvoiceStatus.Send, updatedOrder.Invoice);
+    }
+
+    [Fact]
+    public void GivenMissingOrder_WhenGenerateInvoice_ThenThrows()
+    {
+        Assert.Throws<InvalidOperationException>(() => _supplierService.GenerateInvoice(999999));
+    }
 }

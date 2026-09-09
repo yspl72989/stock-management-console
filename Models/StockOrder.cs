@@ -1,3 +1,5 @@
+using StockApi.Constants;
+
 namespace StockApi.Models;
 
 public class StockOrder
@@ -8,5 +10,5 @@ public class StockOrder
     public string Unit { get; set; } = string.Empty;
     public decimal Price { get; set; }
     public DateTime LastModifiedDate { get; set; }
-    public string Invoice { get; set; } = "N/A";
+    public string Invoice { get; set; } = InvoiceStatus.NotApplicable;
 }
