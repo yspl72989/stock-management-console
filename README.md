@@ -1,6 +1,13 @@
 # Stock Management API
 
-A .NET 8 Web API for managing stock items, backed by SQL Server. StockItem data access uses stored procedures deployed from `Scripts/StoredProcedures/StockItem/` on startup.
+A .NET 8 Web API for managing grocery stock and supplier orders, backed by SQL Server.
+
+## Features
+
+- **Stock management** — CRUD for stock items with validation
+- **Stored procedures** — no inline SQL in repositories
+- **Supplier service** — place orders for items not in stock and generate invoices
+- **Auto database setup** — tables and stored procedures deploy on startup
 
 ## Prerequisites
 
@@ -17,7 +24,7 @@ dotnet run --project StockApi.csproj
 
 Open Swagger UI: [https://localhost:51474/swagger](https://localhost:51474/swagger)
 
-Or press **F5** in Visual Studio with `StockApi.sln` open — it launches straight to Swagger.
+Or press **F5** in Visual Studio with `StockApi.sln` open.
 
 ## Database
 
@@ -25,27 +32,62 @@ Connection strings are in `appsettings.json`:
 
 | Setting | Database | Used for |
 |---------|----------|----------|
-| `StockDb` | `StockManagementDb` | All stock data (`StockItems` table) |
+| `StockDb` | `StockManagementDb` | Stock items, orders, stored procedures |
 | `MasterDb` | `master` | Startup only — creates `StockManagementDb` if missing |
 
-On first run, `DatabaseInitializer` creates the database and table automatically. No manual SQL setup is required.
+On first run, `DatabaseInitializer` creates:
 
-To verify data after testing, connect in SSMS and run:
+- `StockItems` and `StockOrder` tables
+- Stored procedures from `Scripts/StoredProcedures/StockItem/` and `Scripts/StoredProcedures/StockOrder/`
+
+No manual SQL setup is required.
+
+Verify in SSMS:
 
 ```sql
 USE StockManagementDb;
+
 SELECT * FROM dbo.StockItems;
+SELECT * FROM dbo.StockOrder;
+
+SELECT name FROM sys.procedures
+WHERE name LIKE 'uspStockItem_%' OR name LIKE 'uspStockOrder_%'
+ORDER BY name;
 ```
 
-## How to test with Swagger
+## Stored procedures
 
-1. Run the API (see Quick start above).
-2. In Swagger, expand the **Stock** section.
-3. Try the endpoints in this order:
+Repositories call stored procedures via `CommandType.StoredProcedure`. Sproc names live in:
 
-### POST — create a stock item
+| Constants class | Scripts folder |
+|-----------------|----------------|
+| `Constants/StockItemProcedures.cs` | `Scripts/StoredProcedures/StockItem/` |
+| `Constants/StockOrderProcedures.cs` | `Scripts/StoredProcedures/StockOrder/` |
 
-`POST /api/stock` → **Try it out** → use this body:
+Scripts are copied to the build output and deployed on startup by `DatabaseInitializer`.
+
+## Supplier flow
+
+When a customer orders something the store does not stock (e.g. oil):
+
+1. **Place order** — `SupplierService.PlaceOrder` saves a row to `StockOrder` with `Invoice = N/A`
+2. **Generate invoice** — `SupplierService.GenerateInvoice` returns an `InvoiceDto` and sets `Invoice = Send`
+
+If the product exists in stock, unit and price are copied from `StockItems`. Otherwise defaults are used (`Kg`, price `0`).
+
+## API endpoints
+
+### Stock — `/api/stock`
+
+| Method | Route | Description |
+|--------|-------|-------------|
+| GET | `/api/stock` | List all stock items |
+| GET | `/api/stock/{id}` | Get one item |
+| POST | `/api/stock` | Create item |
+| PUT | `/api/stock/{id}` | Update item |
+| DELETE | `/api/stock/{id}` | Delete item |
+
+**POST body example:**
 
 ```json
 {
@@ -56,76 +98,104 @@ SELECT * FROM dbo.StockItems;
 }
 ```
 
-Expected: **201 Created**
-
 Validation rules:
+
 - `unit` must be `Kg`, `Bag`, or `Piece`
 - `quantity` must be > 0 (whole number for Bag/Piece; up to 3 decimals for Kg)
 - `price` must be > 0 (max 2 decimal places)
 - duplicate names return **409 Conflict**
 
-### GET — list or fetch one item
+### Orders — `/api/orders`
 
-- `GET /api/stock` — returns all items
-- `GET /api/stock/{id}` — returns one item by id (use an id from the list)
+| Method | Route | Description |
+|--------|-------|-------------|
+| POST | `/api/orders` | Place a supplier order |
+| POST | `/api/orders/{orderId}/invoice` | Generate invoice for an order |
 
-### PUT — update an item
-
-`PUT /api/stock/{id}` → body example:
+**Place order body:**
 
 ```json
 {
-  "name": "Orange",
-  "quantity": 10,
-  "unit": "Kg",
-  "price": 5.00
+  "name": "Oil",
+  "quantity": 2
 }
 ```
 
-Expected: **204 No Content**, then confirm with `GET /api/stock/{id}`.
+Expected: **201 Created**
 
-### DELETE — remove an item
+**Generate invoice:** `POST /api/orders/1/invoice` (no body)
 
-`DELETE /api/stock/{id}` → Expected: **204 No Content**
+Expected: **200 OK** with invoice JSON:
+
+```json
+{
+  "orderId": 1,
+  "name": "Oil",
+  "quantity": 2,
+  "unit": "Kg",
+  "price": 0,
+  "total": 0,
+  "generatedAt": "2026-09-09T10:00:00Z"
+}
+```
+
+## Swagger test order
+
+1. `POST /api/stock` — create a product (optional, for in-stock order test)
+2. `POST /api/orders` — place an order
+3. Find the order id in SSMS: `SELECT Id, Name FROM dbo.StockOrder ORDER BY Id DESC`
+4. `POST /api/orders/{id}/invoice` — generate invoice
 
 ## Integration tests
 
-Automated API tests live in `StockApi.Test.IntegrationTests/` using **xUnit**, **WebApplicationFactory**, and a shared `[Collection("IntegrationTests")]` fixture.
-
-| Test | What it checks |
-|------|----------------|
-| `GivenNewStock_WhenGetById_ThenIdMatched` | POST → GET all (find id) → GET by id |
-| `GivenExistingStock_WhenUpdated_ThenStockIsUpdated` | POST → PUT → GET confirms update |
-
-Run integration tests:
+Tests live in `StockApi.Test.IntegrationTests/` using **xUnit** and **WebApplicationFactory**.
 
 ```bash
-dotnet test StockApi.Test.IntegrationTests\StockApi.Test.IntegrationTests.csproj
+dotnet test StockApi.sln
 ```
 
-Requirements: SQL Server must be running (same connection strings as the API).
+| Test class | What it covers |
+|------------|----------------|
+| `EndpointTests` | Stock API CRUD via HTTP |
+| `ServiceTests` | `StockService` recently modified products |
+| `StockOrderRepositoryTests` | Order repository create/get |
+| `SupplierServiceTests` | Place order, generate invoice, not-found |
+| `OrderManagementTests` | Order + invoice endpoints via HTTP |
+
+Requirements: SQL Server running with the same connection strings as the API.
 
 ## Solution layout
 
 ```
-StockApi.csproj                        Web API (controllers, services, repositories)
-StockApi.Test.IntegrationTests/        Integration tests (WebApplicationFactory + collection fixture)
-StockApi.Tests/                        Unit tests (placeholder)
-Controllers/                 REST endpoints
-Services/                    Business logic and validation
-Repositories/                ADO.NET data access
-Data/                        DatabaseInitializer, StockDb
+StockApi.csproj                          Web API entry point
+Controllers/                             StockController, OrderManagementController
+Services/                                StockService, SupplierService
+Repositories/                            ADO.NET repositories (stored procedures)
+Models/                                  StockItem, StockOrder
+Models/Dtos/                              InvoiceDto, PlaceOrderRequest
+Constants/                               Sproc names, InvoiceStatus, defaults
+Data/                                    DatabaseInitializer, StockDb
+Scripts/StoredProcedures/StockItem/      Stock item sprocs
+Scripts/StoredProcedures/StockOrder/     Stock order sprocs
+StockApi.Test.IntegrationTests/          Integration tests
 ```
 
 ## Architecture
 
 ```
-HTTP request → StockController → StockService → StockRepository → SQL Server
+Stock:
+  HTTP → StockController → StockService → StockRepository → uspStockItem_* → SQL Server
+
+Supplier:
+  HTTP → OrderManagementController → SupplierService → StockOrderRepository → uspStockOrder_* → SQL Server
+                                                      ↘ StockRepository (stock lookup)
 ```
 
-## Next steps
+## Requirements checklist
 
-1. **More integration tests** — DELETE, duplicate name (409), validation errors (400)
-2. **Unit tests** — cover `StockService` validation rules in isolation
-3. **Improve POST response** — return the created item and id in the 201 response
-
+| Requirement | How it is met |
+|-------------|---------------|
+| Avoid hardcoding | `InvoiceStatus`, `StockItemProcedures`, `StockOrderProcedures`, `SupplierOrderDefaults` |
+| Avoid inline SQL | All repository data access uses stored procedures |
+| Supplier place order | `SupplierService.PlaceOrder`, `POST /api/orders` |
+| Generate invoice | `SupplierService.GenerateInvoice`, `POST /api/orders/{id}/invoice`, returns `InvoiceDto` |

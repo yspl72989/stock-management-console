@@ -18,7 +18,6 @@ public class SupplierService : ISupplierService
         _orderRepository = orderRepository;
     }
 
-// order from existing stock items no unit setup
     public void PlaceOrder(string name, int quantity)
     {
         if (string.IsNullOrWhiteSpace(name))
@@ -34,19 +33,16 @@ public class SupplierService : ISupplierService
         var productName = name.Trim();
 
         var product = _stockRepository.GetAll()
-        //FirstOrDefault is a LINQ method that returns the first element of a sequence or a default value if no element is found.
             .FirstOrDefault(item => item.Name.Equals(productName, StringComparison.OrdinalIgnoreCase));
-        
-//Updated PlaceOrder — lookup in stock when possible, otherwise still save the order.
-// if product exists in stock, copy name/unit/price; otherwise accept the order with defaults
+
         var order = new StockOrder
         {
             Name = product?.Name ?? productName,
             Quantity = quantity,
-            Unit = product?.Unit ?? "Kg",//default unit is Kg
-            Price = product?.Price ?? 0m,//default price is 0
+            Unit = product?.Unit ?? SupplierOrderDefaults.Unit,
+            Price = product?.Price ?? SupplierOrderDefaults.Price,
             LastModifiedDate = DateTime.UtcNow,
-            Invoice = "N/A"//default invoice is N/A
+            Invoice = InvoiceStatus.NotApplicable
         };
 
         _orderRepository.Create(order);

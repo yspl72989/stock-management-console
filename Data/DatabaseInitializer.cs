@@ -23,7 +23,6 @@ internal class DatabaseInitializer
         CreateStockItemsTable();
         CreateStockOrderTable();
         EnsureLastModifiedDateColumn();
-        //new wrapper to deploy all stored procedures at once
         EnsureStockItemStoredProcedures();
         EnsureStockOrderStoredProcedures();
     }
@@ -133,32 +132,23 @@ internal class DatabaseInitializer
         using var command = new SqlCommand(sql, connection);
         command.ExecuteNonQuery();
     }
-//create a method to deploy all stored procedures at once
+
     private void EnsureStockItemStoredProcedures()
-    //create a sqlconnection using the stockconnectionstring and open the connection
     {
-//create a variable to store the path to the scripts directory
-//AppContext.BaseDirectory — the app’s output directory (e.g. bin/Debug/net8.0/)
-//Appends Scripts/StoredProcedures/StockItem/ to the base directory
         EnsureStoredProcedures("StockItem");
     }
-/*Wired StockOrder sproc deployment in DatabaseInitializer.cs:
 
-Initialize() now calls EnsureStockOrderStoredProcedures() after the StockItem deploy.
-EnsureStockOrderStoredProcedures() deploys all *.sql files from Scripts/StoredProcedures/StockOrder/ using the existing DeployStoredProcedureScript helper.*/
     private void EnsureStockOrderStoredProcedures()
     {
         EnsureStoredProcedures("StockOrder");
     }
 
     private void EnsureStoredProcedures(string subfolder)
-    {    using var connection = new SqlConnection(_stockConnectionString);
+    {
+        using var connection = new SqlConnection(_stockConnectionString);
         connection.Open();
 
         var scriptsDirectory = Path.Combine(
-            
-            //AppContext.BaseDirectory is bin/Debug/net8.0/ when you run the app — not your source folder (c:\eNett\Git\StockCli\Scripts\...).
-           //Without the copy rule, the app would start, look in bin/.../Scripts/StockOrder/, find nothing, and fail.
             AppContext.BaseDirectory,
             "Scripts",
             "StoredProcedures",
@@ -166,15 +156,12 @@ EnsureStockOrderStoredProcedures() deploys all *.sql files from Scripts/StoredPr
 
         foreach (var scriptPath in Directory.GetFiles(scriptsDirectory, "*.sql"))
         {
-            //Reads the full script text and passes it to DeployStoredProcedureScript on the open connection.
             DeployStoredProcedureScript(connection, File.ReadAllText(scriptPath));
         }
     }
 
-//Static helper: takes an open SqlConnection and the raw SQL script text. Static because it doesn’t use instance fields
     private static void DeployStoredProcedureScript(SqlConnection connection, string sql)
     {
-        //a script ending with GO (like uspStockItem_GetById.sql) becomes one batch without GO.
         sql = string.Join(
             '\n',
             sql.Split('\n').Where(line => !line.Trim().Equals("GO", StringComparison.OrdinalIgnoreCase))).Trim();
