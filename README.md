@@ -26,6 +26,88 @@ Open Swagger UI: [https://localhost:51474/swagger](https://localhost:51474/swagg
 
 Or press **F5** in Visual Studio with `StockApi.sln` open.
 
+**Important:** Set **`StockApi`** as the startup project (not `StockApi.Tests`). To run tests, use **Test Explorer** or `dotnet test` — see [Running tests](#running-tests).
+
+## How it works
+
+### Stock flow
+
+```
+Customer / Swagger → POST /api/stock → StockService validates → StockRepository → uspStockItem_Insert → StockItems table
+```
+
+Stock items are products the store keeps on the shelf (fruit, veg, etc.).
+
+### Supplier order flow
+
+When a customer wants something the store does not stock (e.g. oil):
+
+```
+1. POST /api/orders          → SupplierService.PlaceOrder
+                             → saves row to StockOrder (Invoice = "N/A")
+
+2. POST /api/orders/{id}/invoice → SupplierService.GenerateInvoice
+                                 → returns InvoiceDto JSON in response body
+                                 → updates StockOrder.Invoice to "Send"
+```
+
+| Step | What happens in the database | What you see in Swagger |
+|------|------------------------------|-------------------------|
+| Place order | New row in `StockOrder`; `Invoice = N/A` | **201 Created** (no body) |
+| Generate invoice | Same row updated; `Invoice = Send` | **200 OK** with invoice JSON in **response body** |
+
+### Where is the invoice?
+
+The invoice is **not** stored as a separate document or table. It is the **JSON returned** when you call generate invoice.
+
+**In SSMS** you only see a status flag:
+
+```sql
+SELECT Id, Name, Quantity, Invoice FROM dbo.StockOrder;
+-- Invoice column: "N/A" or "Send"
+```
+
+**In Swagger** you see the full invoice in the **Response body** after `POST /api/orders/{orderId}/invoice`:
+
+```json
+{
+  "orderId": 3,
+  "name": "Oil",
+  "quantity": 2,
+  "unit": "Kg",
+  "price": 4.50,
+  "total": 9.00,
+  "generatedAt": "2026-09-11T05:46:20Z"
+}
+```
+
+| Field | Meaning |
+|-------|---------|
+| `orderId` | Order this invoice belongs to |
+| `name` | Product name from the order |
+| `quantity` | Units ordered |
+| `unit` | Kg, Bag, or Piece |
+| `price` | Price per unit |
+| `total` | `quantity × price` |
+| `generatedAt` | When the invoice was generated (UTC) |
+
+There is no `GET` endpoint to fetch an invoice later — call `POST .../invoice` again to regenerate the JSON from the order row.
+
+### Weird names in the database (e.g. `ApiGet-a1b2c3d4-...`)
+
+If you see names like `SupplierOrder-ef8d3515-...` or `Order-a78c76d2-...` in SSMS, that is **leftover integration test data**, not a bug in the API.
+
+Integration tests use unique names so repeated runs do not hit duplicate-name errors:
+
+```csharp
+Name = $"ApiGet-{Guid.NewGuid()}"   // EndpointTests
+Name = $"SupplierOrder-{Guid.NewGuid()}"   // SupplierServiceTests
+```
+
+Tests and Swagger share the same database (`StockManagementDb`) and tests do not clean up after themselves.
+
+When **you** test manually in Swagger with `"name": "Oil"`, the saved name is **`Oil`**. Manual demo flow below uses real names.
+
 ## Database
 
 Connection strings are in `appsettings.json`:
@@ -139,14 +221,76 @@ Expected: **200 OK** with invoice JSON:
 }
 ```
 
-## Swagger test order
+## Swagger demo (manual test with real names)
 
-1. `POST /api/stock` — create a product (optional, for in-stock order test)
-2. `POST /api/orders` — place an order
-3. Find the order id in SSMS: `SELECT Id, Name FROM dbo.StockOrder ORDER BY Id DESC`
-4. `POST /api/orders/{id}/invoice` — generate invoice
+Use this flow to see a clean invoice with a normal product name.
 
-## Integration tests
+### 1. Create stock (optional — copies unit/price onto the order)
+
+`POST /api/stock`
+
+```json
+{
+  "name": "Oil",
+  "quantity": 10,
+  "unit": "Kg",
+  "price": 4.50
+}
+```
+
+Expected: **201 Created**
+
+### 2. Place a supplier order
+
+`POST /api/orders`
+
+```json
+{
+  "name": "Oil",
+  "quantity": 2
+}
+```
+
+Expected: **201 Created**
+
+### 3. Get the order id
+
+Swagger does not return the new order id. In SSMS:
+
+```sql
+USE StockManagementDb;
+SELECT Id, Name, Invoice FROM dbo.StockOrder ORDER BY Id DESC;
+```
+
+Note the `Id` for your `"Oil"` row (e.g. `16`).
+
+### 4. Generate invoice — **this is the invoice**
+
+`POST /api/orders/16/invoice` (no request body)
+
+Expected: **200 OK** — read the **Response body**:
+
+```json
+{
+  "orderId": 16,
+  "name": "Oil",
+  "quantity": 2,
+  "unit": "Kg",
+  "price": 4.50,
+  "total": 9.00,
+  "generatedAt": "..."
+}
+```
+
+In SSMS, the same row now has `Invoice = Send`.
+
+## Running tests
+
+| Goal | Command / action |
+|------|------------------|
+| Run API + Swagger | Set startup project to **`StockApi`**, press F5 |
+| Run integration tests | `dotnet test StockApi.Test.IntegrationTests\StockApi.Test.IntegrationTests.csproj` |
+| Do **not** F5 on `StockApi.Tests` | Empty placeholder project — will crash with `System.Runtime` error |
 
 Tests live in `StockApi.Test.IntegrationTests/` using **xUnit** and **WebApplicationFactory**.
 
@@ -191,11 +335,31 @@ Supplier:
                                                       ↘ StockRepository (stock lookup)
 ```
 
-## Requirements checklist
 
-| Requirement | How it is met |
-|-------------|---------------|
-| Avoid hardcoding | `InvoiceStatus`, `StockItemProcedures`, `StockOrderProcedures`, `SupplierOrderDefaults` |
-| Avoid inline SQL | All repository data access uses stored procedures |
-| Supplier place order | `SupplierService.PlaceOrder`, `POST /api/orders` |
-| Generate invoice | `SupplierService.GenerateInvoice`, `POST /api/orders/{id}/invoice`, returns `InvoiceDto` |
+## Next plan (improvements)
+
+Items to tackle next — especially cleaning up test data and improving the developer experience.
+
+### Test data and database
+
+- [ ] **Use a separate test database** — point `StockApi.Test.IntegrationTests/appsettings.json` at `StockManagementDb_test` so manual Swagger data in `StockManagementDb` stays clean
+- [ ] **Stop using GUID names in tests** (or use them only with cleanup) — use fixed names with test teardown, or delete test rows in `Dispose` / `IAsyncLifetime`
+- [ ] **Clean up after integration tests** — delete `StockItems` / `StockOrder` rows created in each test (or truncate in fixture teardown)
+- [ ] **Document or script manual DB cleanup** for existing test rows (`DELETE ... WHERE Name LIKE 'Api%'`)
+
+### API improvements
+
+- [ ] **Return order id from `POST /api/orders`** — e.g. 201 with `{ "orderId": 16 }` so Swagger demo does not need SSMS
+- [ ] **`GET /api/orders/{id}/invoice`** — retrieve invoice JSON without re-posting (optional; would need to store invoice or rebuild from order)
+- [ ] **Prevent double invoice** — reject or warn if `Invoice` is already `Send` when generating again
+
+### Tests and project hygiene
+
+- [ ] **Remove or populate `StockApi.Tests`** — add unit tests for `StockService` validation, or remove empty project to avoid F5 confusion
+- [ ] **Add unit tests** for validation rules (duplicate name, invalid unit, quantity decimals)
+- [ ] **More integration tests** — out-of-stock place order, duplicate invoice edge cases
+
+### Invoice format (stretch)
+
+- [ ] **HTML or PDF invoice** — if required beyond JSON (email template, printable view)
+- [ ] **Persist invoice** — optional `Invoice` table if you need history separate from `StockOrder.Invoice` flag
